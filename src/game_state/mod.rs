@@ -56,6 +56,8 @@ impl Game {
         // } else {
         //     library2 = None;
         // }
+
+        
         let mut players = [Player::new(init_level), Player::new(init_level)];
         // open channel for multi-threading
         let (sender, recieved_moves) = mpsc::channel();
