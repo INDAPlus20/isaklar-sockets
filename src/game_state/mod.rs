@@ -1,5 +1,5 @@
 use crate::game_data::{Color, Piece, Player, COLS, ROWS, SHAPES};
-use ggez::{event::KeyCode, graphics::padresse::new};
+use ggez::{event::KeyCode, graphics::pipe::new};
 use rand::distributions::uniform;
 use std::env;
 
@@ -12,7 +12,7 @@ use std::sync::mpsc;
 use std::thread;
 
 pub const PLAYER_AMOUNT: usize = 2;
-/// Function signature for the ai-scradresst
+/// Function signature for the ai-script
 type AIFunc = unsafe fn(*const [[u32; 10]; 24], *const [[i32; 2]; 4], *const [[i32; 2]; 4]) -> u32;
 type Packet = [u8; 2];
 #[cfg(test)]
@@ -65,13 +65,13 @@ impl Game {
 
         let mut stream: TcpStream;
         let connection_type = env::args().nth(1).unwrap();
-        let adress = env::args().nth(2).unwrap();
+        let ip = env::args().nth(2).unwrap();
         // establish connection
         if  connection_type == "host" {
-            let listener = TcpListener::bind(adress).expect("invalid adress");
+            let listener = TcpListener::bind(ip).expect("invalid adress");
             stream = listener.accept().unwrap().0;
         } else if connection_type == "connect" {
-            stream = TcpStream::connect(adress).unwrap();
+            stream = TcpStream::connect(ip).unwrap();
         } else {
             panic!("Could not establish connection");
         }
@@ -131,7 +131,7 @@ impl Game {
         }
         for i in 0..self.ai_lib.len() {
             if self.ai_lib[i].is_some() {
-                let ai_output = self.call_ai_scradresst(i);
+                let ai_output = self.call_ai_script(i);
                 self.parse_ai_output(i, ai_output);
             }
         }
@@ -172,7 +172,7 @@ impl Game {
         }
         attackbars
     }
-    /// Returns formatted data for the ai-scradresst, without block-projection.
+    /// Returns formatted data for the ai-script, without block-projection.
     pub fn get_player_data(
         &self,
         index: usize,
@@ -258,7 +258,7 @@ impl Game {
         self.players = [Player::new(init_level), Player::new(init_level)];
     }
 
-    fn call_ai_scradresst(&mut self, player_index: usize) -> u32 {
+    fn call_ai_script(&mut self, player_index: usize) -> u32 {
         let mut output = 0;
 
         unsafe {
