@@ -89,28 +89,27 @@ impl Game {
         players[1].current_piece = current_piece;
         players[1].next_piece = next_piece;
 
-        // spawn thread 
+        // spawn thread
         thread::spawn(move || {
             Game::handle_connection(stream, sender, reciever);
         });
-        
+
         Game {
             players: players,
             ai_lib: [library2, library],
-            recieved_moves: recieved_moves, // channel for networking
+            recieved_moves: recieved_moves,
             moves_to_send: moves_to_send,
         }
     }
     /// The game-tick update function
     pub fn update(&mut self) {
         // get next action from remote opponent
-        if let Ok(package)  = self.recieved_moves.try_recv(){
-
-            if package != [0,0]{
+        if let Ok(package) = self.recieved_moves.try_recv() {
+            if package != [0, 0] {
                 //println!("Got a non [0,0] package");
                 self.players[1].next_piece = Game::piece_from_u8(package[1]);
                 self.parse_ai_output(1, package[0] as u32);
-            } 
+            }
         }
         // update game tick for players
         let mut target_mod: i32 = 1; //Pairs, you attack the one next to you
@@ -129,9 +128,6 @@ impl Game {
                 self.parse_ai_output(i, ai_output);
             }
         }
-        
-
-
     }
     /// Gets and returns the graphical boardstate of the players
     pub fn get_boards(&self) -> [[[u32; COLS]; ROWS]; PLAYER_AMOUNT] {
@@ -233,7 +229,8 @@ impl Game {
             //println!("sent {:?} to the thread",[move_index, self.players[0].next_piece.color as u8] );
             // send move to opponent
             self.moves_to_send
-                .send([move_index, self.players[0].next_piece.color as u8]).expect("move send error");
+                .send([move_index, self.players[0].next_piece.color as u8])
+                .expect("move send error");
         }
         if self.ai_lib[1].is_none() {
             match key {
@@ -279,7 +276,7 @@ impl Game {
             _ => (),
         }
     }
-
+    /// handles recieving and sending moves to the online opponent
     fn handle_connection(
         mut stream: TcpStream,
         sender: mpsc::Sender<Packet>,
@@ -293,32 +290,30 @@ impl Game {
                 //println!("recieved move from main thread");
                 stream.write(&response).unwrap();
                 stream.flush().unwrap();
-                //println!("wrote move from main thread");
+            //println!("wrote move from main thread");
             } else {
-                stream.write(&[0,0]).unwrap();
+                stream.write(&[0, 0]).unwrap();
                 stream.flush().unwrap();
             }
-            
+
             match stream.read(&mut buffer) {
                 Ok(0) => {
                     open = false;
                     println!("Connection closed!");
                 }
                 Ok(len) => {
-                    if buffer != [0,0] {
-                        println!("Recieved: {:?}", &buffer);
+                    if buffer != [0, 0] {
+                        //println!("Recieved: {:?}", &buffer);
                     }
-                   
                 }
                 Err(_) => println!("Error reading stream"),
             }
-            if buffer != [0,0] {
-            sender.send(buffer).expect("Send error");
+            if buffer != [0, 0] {
+                sender.send(buffer).expect("Send error");
             }
-            
         }
     }
-
+    /// creates a piece based on the color
     fn piece_from_u8(input: u8) -> Piece {
         let color = match input {
             1 => Color::Color1,
