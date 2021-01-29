@@ -26,36 +26,36 @@ pub struct Game {
 
 impl Game {
     pub fn new(init_level: usize) -> Game {
-        let library: Option<Library>;
-        if let Some(lib_path) = env::args().nth(1) {
-            if cfg!(windows) && !lib_path.ends_with(".dll") {
-                panic!("Must use .dll if running an AI in windows!")
-            } else if cfg!(unix) && !lib_path.ends_with(".so") {
-                panic!("Must use .so if running an AI in a 'nix-system!")
-            }
-            if let Ok(lib) = Library::new(lib_path) {
-                library = Some(lib);
-            } else {
-                library = None;
-            }
-        } else {
-            library = None;
-        }
-        let library2: Option<Library>;
-        if let Some(lib_path2) = env::args().nth(2) {
-            if cfg!(windows) && !lib_path2.ends_with(".dll") {
-                panic!("Must use .dll if running an AI in windows!")
-            } else if cfg!(unix) && !lib_path2.ends_with(".so") {
-                panic!("Must use .so if running an AI in a 'nix-system!")
-            }
-            if let Ok(lib2) = Library::new(lib_path2) {
-                library2 = Some(lib2);
-            } else {
-                library2 = None;
-            }
-        } else {
-            library2 = None;
-        }
+        // let library: Option<Library>;
+        // if let Some(lib_path) = env::args().nth(1) {
+        //     if cfg!(windows) && !lib_path.ends_with(".dll") {
+        //         panic!("Must use .dll if running an AI in windows!")
+        //     } else if cfg!(unix) && !lib_path.ends_with(".so") {
+        //         panic!("Must use .so if running an AI in a 'nix-system!")
+        //     }
+        //     if let Ok(lib) = Library::new(lib_path) {
+        //         library = Some(lib);
+        //     } else {
+        //         library = None;
+        //     }
+        // } else {
+        //     library = None;
+        // }
+        // let library2: Option<Library>;
+        // if let Some(lib_path2) = env::args().nth(2) {
+        //     if cfg!(windows) && !lib_path2.ends_with(".dll") {
+        //         panic!("Must use .dll if running an AI in windows!")
+        //     } else if cfg!(unix) && !lib_path2.ends_with(".so") {
+        //         panic!("Must use .so if running an AI in a 'nix-system!")
+        //     }
+        //     if let Ok(lib2) = Library::new(lib_path2) {
+        //         library2 = Some(lib2);
+        //     } else {
+        //         library2 = None;
+        //     }
+        // } else {
+        //     library2 = None;
+        // }
         let mut players = [Player::new(init_level), Player::new(init_level)];
         // open channel for multi-threading
         let (sender, recieved_moves) = mpsc::channel();
@@ -96,7 +96,7 @@ impl Game {
 
         Game {
             players: players,
-            ai_lib: [library2, library],
+            ai_lib: [None, None], //[library2, library],
             recieved_moves: recieved_moves,
             moves_to_send: moves_to_send,
         }
