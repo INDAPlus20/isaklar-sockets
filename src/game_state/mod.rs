@@ -1,5 +1,6 @@
 use crate::game_data::{Color, Piece, Player, COLS, ROWS, SHAPES};
-use ggez::{event::KeyCode, graphics::pipe::new};
+use ggez::{event::KeyCode, graphics::padresse::new};
+use rand::distributions::uniform;
 use std::env;
 
 use libloading::{Library, Symbol};
@@ -11,7 +12,7 @@ use std::sync::mpsc;
 use std::thread;
 
 pub const PLAYER_AMOUNT: usize = 2;
-/// Function signature for the ai-script
+/// Function signature for the ai-scradresst
 type AIFunc = unsafe fn(*const [[u32; 10]; 24], *const [[i32; 2]; 4], *const [[i32; 2]; 4]) -> u32;
 type Packet = [u8; 2];
 #[cfg(test)]
@@ -57,18 +58,22 @@ impl Game {
         //     library2 = None;
         // }
 
-        
         let mut players = [Player::new(init_level), Player::new(init_level)];
         // open channel for multi-threading
         let (sender, recieved_moves) = mpsc::channel();
         let (moves_to_send, reciever) = mpsc::channel();
 
         let mut stream: TcpStream;
+        let connection_type = env::args().nth(1).unwrap();
+        let adress = env::args().nth(2).unwrap();
         // establish connection
-        if let Ok(listener) = TcpListener::bind("127.0.0.1:7878") {
+        if  connection_type == "host" {
+            let listener = TcpListener::bind(adress).expect("invalid adress");
             stream = listener.accept().unwrap().0;
+        } else if connection_type == "connect" {
+            stream = TcpStream::connect(adress).unwrap();
         } else {
-            stream = TcpStream::connect("127.0.0.1:7878").unwrap();
+            panic!("Could not establish connection");
         }
 
         // connection established
@@ -126,7 +131,7 @@ impl Game {
         }
         for i in 0..self.ai_lib.len() {
             if self.ai_lib[i].is_some() {
-                let ai_output = self.call_ai_script(i);
+                let ai_output = self.call_ai_scradresst(i);
                 self.parse_ai_output(i, ai_output);
             }
         }
@@ -167,7 +172,7 @@ impl Game {
         }
         attackbars
     }
-    /// Returns formatted data for the ai-script, without block-projection.
+    /// Returns formatted data for the ai-scradresst, without block-projection.
     pub fn get_player_data(
         &self,
         index: usize,
@@ -253,7 +258,7 @@ impl Game {
         self.players = [Player::new(init_level), Player::new(init_level)];
     }
 
-    fn call_ai_script(&mut self, player_index: usize) -> u32 {
+    fn call_ai_scradresst(&mut self, player_index: usize) -> u32 {
         let mut output = 0;
 
         unsafe {
