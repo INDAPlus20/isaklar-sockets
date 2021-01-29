@@ -54,16 +54,16 @@ pub const TIME_LEVELS: [f64; 20] = [
     1.0, 0.79300, 0.61780, 0.47273, 0.35520, 0.26200, 0.18968, 0.13473, 0.09388, 0.06415, 0.04298,
     0.02822, 0.01815, 0.01144, 0.00706, 0.00426, 0.00252, 0.00146, 0.00082, 0.00046,
 ];
-
+#[derive(Clone)]
 pub struct Player {
     board: [[u32; COLS]; ROWS],
     incoming: Vec<(u8, u8)>,
     outgoing: Option<(u8, u8)>,
-    current_piece: Piece,
+    pub current_piece: Piece,
     piece_shadow: Option<Piece>,
     saved_piece: Option<Piece>,
     has_saved: bool,
-    next_piece: Piece,
+    pub next_piece: Piece,
     score: usize,
     lost: bool,
     gravity: f64,
@@ -409,7 +409,7 @@ impl Player {
 pub struct Piece {
     shape: Shape,
     display_shape: [[u32; 4]; 4],
-    color: Color,
+    pub color: Color,
     position: Point,
 }
 

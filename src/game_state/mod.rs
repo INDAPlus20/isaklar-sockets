@@ -1,19 +1,27 @@
-use crate::game_data::{Player, COLS, ROWS};
-use ggez::event::KeyCode;
+use crate::game_data::{Color, Piece, Player, COLS, ROWS, SHAPES};
+use ggez::{event::KeyCode, graphics::pipe::new};
 use std::env;
 
 use libloading::{Library, Symbol};
 
+use std::io::prelude::*;
+use std::net::TcpListener;
+use std::net::TcpStream;
+use std::sync::mpsc;
+use std::thread;
+
 pub const PLAYER_AMOUNT: usize = 2;
 /// Function signature for the ai-script
 type AIFunc = unsafe fn(*const [[u32; 10]; 24], *const [[i32; 2]; 4], *const [[i32; 2]; 4]) -> u32;
-
+type Packet = [u8; 2];
 #[cfg(test)]
 mod tests;
 
 pub struct Game {
     players: [Player; PLAYER_AMOUNT],
     ai_lib: [Option<Library>; 2],
+    recieved_moves: mpsc::Receiver<Packet>, // channel for networking
+    moves_to_send: mpsc::Sender<Packet>,
 }
 
 impl Game {
@@ -48,14 +56,62 @@ impl Game {
         } else {
             library2 = None;
         }
+        let mut players = [Player::new(init_level), Player::new(init_level)];
+        // open channel for multi-threading
+        let (sender, recieved_moves) = mpsc::channel();
+        let (moves_to_send, reciever) = mpsc::channel();
 
+        let mut stream: TcpStream;
+        // establish connection
+        if let Ok(listener) = TcpListener::bind("127.0.0.1:7878") {
+            stream = listener.accept().unwrap().0;
+        } else {
+            stream = TcpStream::connect("127.0.0.1:7878").unwrap();
+        }
+
+        // connection established
+        // send first package containing current piece and next piece
+        stream
+            .write(&[
+                players[0].current_piece.color as u8,
+                players[0].next_piece.color as u8,
+            ])
+            .unwrap();
+        stream.flush().unwrap();
+
+        // read first package
+        let mut buffer = [0; 2];
+        stream.read(&mut buffer);
+
+        // set P2 pieces according to package
+        let current_piece = Game::piece_from_u8(buffer[0]);
+        let next_piece = Game::piece_from_u8(buffer[1]);
+        players[1].current_piece = current_piece;
+        players[1].next_piece = next_piece;
+
+        // spawn thread 
+        thread::spawn(move || {
+            Game::handle_connection(stream, sender, reciever);
+        });
+        
         Game {
-            players: [Player::new(init_level), Player::new(init_level)],
+            players: players,
             ai_lib: [library2, library],
+            recieved_moves: recieved_moves, // channel for networking
+            moves_to_send: moves_to_send,
         }
     }
     /// The game-tick update function
     pub fn update(&mut self) {
+        // get next action from remote opponent
+        if let Ok(package)  = self.recieved_moves.try_recv(){
+
+            if package != [0,0]{
+                //println!("Got a non [0,0] package");
+                self.players[1].next_piece = Game::piece_from_u8(package[1]);
+                self.parse_ai_output(1, package[0] as u32);
+            } 
+        }
         // update game tick for players
         let mut target_mod: i32 = 1; //Pairs, you attack the one next to you
         for p in 0..self.players.len() {
@@ -73,6 +129,9 @@ impl Game {
                 self.parse_ai_output(i, ai_output);
             }
         }
+        
+
+
     }
     /// Gets and returns the graphical boardstate of the players
     pub fn get_boards(&self) -> [[[u32; COLS]; ROWS]; PLAYER_AMOUNT] {
@@ -87,6 +146,7 @@ impl Game {
         for p in 0..self.players.len() {
             next_pieces[p] = self.players[p].get_next_piece().get_display_shape();
         }
+
         next_pieces
     }
     /// Gets and returns the saved pieces of the players
@@ -137,17 +197,43 @@ impl Game {
     //Only set for 2 players
     pub fn key_down(&mut self, key: KeyCode) {
         if self.ai_lib[0].is_none() {
+            let mut move_index = 0;
             match key {
                 // P1 controlls
-                KeyCode::A => self.players[0].move_current(-1, 0),
-                KeyCode::E => self.players[0].rotate_current(true),
-                KeyCode::D => self.players[0].move_current(1, 0),
-                KeyCode::Q => self.players[0].rotate_current(false),
-                KeyCode::S => self.players[0].move_current(0, -1),
-                KeyCode::W => self.players[0].drop_current(),
-                KeyCode::Space => self.players[0].save_piece(),
+                KeyCode::A => {
+                    self.players[0].move_current(-1, 0);
+                    move_index = 1;
+                }
+                KeyCode::E => {
+                    self.players[0].rotate_current(true);
+                    move_index = 3;
+                }
+                KeyCode::D => {
+                    self.players[0].move_current(1, 0);
+                    move_index = 2;
+                }
+                KeyCode::Q => {
+                    self.players[0].rotate_current(false);
+                    move_index = 4;
+                }
+                KeyCode::S => {
+                    self.players[0].move_current(0, -1);
+                    move_index = 5;
+                }
+                KeyCode::W => {
+                    self.players[0].drop_current();
+                    move_index = 6;
+                }
+                KeyCode::Space => {
+                    self.players[0].save_piece();
+                    move_index = 7;
+                }
                 _ => (),
             }
+            //println!("sent {:?} to the thread",[move_index, self.players[0].next_piece.color as u8] );
+            // send move to opponent
+            self.moves_to_send
+                .send([move_index, self.players[0].next_piece.color as u8]).expect("move send error");
         }
         if self.ai_lib[1].is_none() {
             match key {
@@ -192,5 +278,61 @@ impl Game {
             7 => self.players[player_index].save_piece(),
             _ => (),
         }
+    }
+
+    fn handle_connection(
+        mut stream: TcpStream,
+        sender: mpsc::Sender<Packet>,
+        reciever: mpsc::Receiver<Packet>,
+    ) {
+        println!("handeling connection");
+        let mut buffer: Packet = [0; 2];
+        let mut open = true;
+        while open {
+            if let Ok(response) = reciever.try_recv() {
+                //println!("recieved move from main thread");
+                stream.write(&response).unwrap();
+                stream.flush().unwrap();
+                //println!("wrote move from main thread");
+            } else {
+                stream.write(&[0,0]).unwrap();
+                stream.flush().unwrap();
+            }
+            
+            match stream.read(&mut buffer) {
+                Ok(0) => {
+                    open = false;
+                    println!("Connection closed!");
+                }
+                Ok(len) => {
+                    if buffer != [0,0] {
+                        println!("Recieved: {:?}", &buffer);
+                    }
+                   
+                }
+                Err(_) => println!("Error reading stream"),
+            }
+            if buffer != [0,0] {
+            sender.send(buffer).expect("Send error");
+            }
+            
+        }
+    }
+
+    fn piece_from_u8(input: u8) -> Piece {
+        let color = match input {
+            1 => Color::Color1,
+            2 => Color::Color2,
+            3 => Color::Color3,
+            4 => Color::Color4,
+            5 => Color::Color5,
+            6 => Color::Color6,
+            _ => Color::Color7,
+        };
+        Piece::new(
+            SHAPES[(input - 1) as usize],
+            color,
+            [COLS as i32 / 2, ROWS as i32 - 1],
+        )
     }
 }
